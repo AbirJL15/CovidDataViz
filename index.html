@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive COVID-19 Data Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        body { 
+            font-family: 'Roboto', Arial, sans-serif; 
+            text-align: center; 
+            margin: 0; 
+            padding: 0; 
+            background-color: #f4f4f9;
+        }
+        h1 { 
+            margin-top: 20px; 
+            font-size: 2.5em; 
+            font-weight: 700; 
+            color: #333;
+        }
+        .intro {
+            margin: 20px auto;
+            max-width: 800px;
+            font-size: 1em; /* Reduced size */
+            line-height: 1.5;
+            color: #555;
+        }
+        .dashboard-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px;
+        }
+        .chart-container {
+            flex: 1 1 45%; /* Adjusts the size of each chart */
+            max-width: 800px;
+            min-width: 300px;
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        .chart-title {
+            text-align: center;
+            font-size: 1.5em;
+            color: #4a4a4a;
+            margin-bottom: 10px;
+        }
+        svg {
+            border: 1px solid #ccc;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .tooltip {
+            position: absolute;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            padding: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            pointer-events: none;
+            font-size: 0.9em;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Interactive COVID-19 Data Visualization</h1>
+    <div class="intro">
+        This dashboard provides a comprehensive overview of the COVID-19 pandemic's impact across various countries. By visualizing total cases, deaths, and recoveries, it aims to present a clear and accessible understanding of the pandemic's scope. The visual representation allows for easy comparison between countries, highlighting differences in how regions have been affected. This interactive approach helps in raising awareness and promoting an informed perspective on the ongoing global health crisis.
+    </div>
+    <div class="dashboard-container">
+        <!-- First Chart: Total Cases -->
+        <div class="chart-container">
+            <div style="text-align: left; margin-bottom: 10px;">
+                <label for="continent">Filter by Continent: </label>
+                <select id="continent">
+                    <option value="All">All</option>
+                    <option value="Asia">Asia</option>
+                    <option value="Europe">Europe</option>
+                    <option value="North America">North America</option>
+                    <option value="South America">South America</option>
+                    <option value="Africa">Africa</option>
+                    <option value="Australia/Oceania">Australia/Oceania</option>
+                </select>
+            </div>
+            <div class="chart-title">Total Cases by Continent</div>
+            <div id="visualisation"></div>
+        </div>
+
+        <!-- Second Chart: Total Deaths -->
+        <div class="chart-container">
+            <div class="chart-title">Total Deaths by Continent</div>
+            <div id="second-visualisation"></div>
+        </div>
+
+        <!-- Third Chart: Total Recoveries -->
+        <div class="chart-container">
+            <div class="chart-title">Total Recoveries by Continent</div>
+            <div id="third-visualisation"></div>
+        </div>
+
+        <!-- Fourth Chart: Cases, Deaths, and Recoveries Comparison -->
+        <div class="chart-container">
+            <div class="chart-title">Comparison of Cases, Deaths, and Recoveries by Continent</div>
+            <div id="fourth-visualisation"></div>
+        </div>
+    </div>
+    <!-- Add a button to navigate to page2.html -->
+    <div style="margin-top: 20px;">
+        <button onclick="location.href='page2.html'" style="padding: 10px 20px; font-size: 16px; background-color: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+            Go to next page
+        </button>
+    </div>
+    <script>
+        const width = 800;
+        const height = 400;
+        const margin = { top: 40, right: 20, bottom: 60, left: 60 };
+
+        const charts = [
+            { containerId: "#visualisation", metric: "TotalCases", color: "#4a90e2" }, // Blue for Total Cases
+            { containerId: "#second-visualisation", metric: "TotalDeaths", color: "#e74c3c" }, // Red for Total Deaths
+            { containerId: "#third-visualisation", metric: "TotalRecovered", color: "#2ecc71" }, // Green for Total Recoveries
+        ];
+
+        function createChart(chart) {
+            const svg = d3.select(chart.containerId)
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const tooltip = d3.select("body")
+                .append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+
+            d3.csv("worldometer_data.csv").then(data => {
+                data.forEach(d => {
+                    d[chart.metric] = +d[chart.metric];
+                });
+
+                const aggregatedData = d3.rollups(data, v => d3.sum(v, d => d[chart.metric]), d => d.Continent)
+                    .map(([Continent, value]) => ({ Continent, value }));
+
+                const x = d3.scaleBand()
+                    .domain(aggregatedData.map(d => d.Continent))
+                    .range([margin.left, width - margin.right])
+                    .padding(0.2);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(aggregatedData, d => d.value)]).nice()
+                    .range([height - margin.bottom, margin.top]);
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height - margin.bottom})`)
+                    .call(d3.axisBottom(x))
+                    .selectAll("text")
+                    .attr("transform", "rotate(-45)")
+                    .style("text-anchor", "end");
+
+                svg.append("g")
+                    .attr("transform", `translate(${margin.left},0)`)
+                    .call(d3.axisLeft(y));
+
+                const bars = svg.selectAll("rect")
+                    .data(aggregatedData)
+                    .enter()
+                    .append("rect")
+                    .attr("x", d => x(d.Continent))
+                    .attr("y", d => y(d.value))
+                    .attr("width", x.bandwidth())
+                    .attr("height", d => height - margin.bottom - y(d.value))
+                    .attr("fill", chart.color)
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(`<strong>${chart.metric}:</strong> ${d.value}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                    })
+                    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+
+                // Store chart data and elements for filtering
+                chart.data = aggregatedData;
+                chart.bars = bars;
+                chart.x = x;
+                chart.y = y;
+            }).catch(error => {
+                console.error('Error fetching the CSV file:', error);
+            });
+        }
+
+        function createGroupedBarChart(containerId) {
+            const svg = d3.select(containerId)
+                .append("svg")
+                .attr("width", width)
+                .attr("height", height);
+
+            const tooltip = d3.select("body")
+                .append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+
+            d3.csv("worldometer_data.csv").then(data => {
+                data.forEach(d => {
+                    d.TotalCases = +d.TotalCases;
+                    d.TotalDeaths = +d.TotalDeaths;
+                    d.TotalRecovered = +d.TotalRecovered;
+                });
+
+                const aggregatedData = d3.rollups(data, v => ({
+                    TotalCases: d3.sum(v, d => d.TotalCases),
+                    TotalDeaths: d3.sum(v, d => d.TotalDeaths),
+                    TotalRecovered: d3.sum(v, d => d.TotalRecovered)
+                }), d => d.Continent).map(([Continent, values]) => ({
+                    Continent,
+                    ...values
+                }));
+
+                const x = d3.scaleBand()
+                    .domain(aggregatedData.map(d => d.Continent))
+                    .range([margin.left, width - margin.right])
+                    .padding(0.2);
+
+                const y = d3.scaleLinear()
+                    .domain([0, d3.max(aggregatedData, d => d.TotalCases)]).nice()
+                    .range([height - margin.bottom, margin.top]);
+
+                svg.append("g")
+                    .attr("transform", `translate(0,${height - margin.bottom})`)
+                    .call(d3.axisBottom(x))
+                    .selectAll("text")
+                    .attr("transform", "rotate(-45)")
+                    .style("text-anchor", "end");
+
+                svg.append("g")
+                    .attr("transform", `translate(${margin.left},0)`)
+                    .call(d3.axisLeft(y));
+
+                const barWidth = x.bandwidth() / 3;
+
+                const groups = svg.selectAll(".group")
+                    .data(aggregatedData)
+                    .enter()
+                    .append("g")
+                    .attr("class", "group")
+                    .attr("transform", d => `translate(${x(d.Continent)},0)`);
+
+                groups.append("rect")
+                    .attr("class", "cases-bar")
+                    .attr("y", d => y(d.TotalCases))
+                    .attr("width", barWidth)
+                    .attr("height", d => height - margin.bottom - y(d.TotalCases))
+                    .attr("fill", "#3498db")
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(`<strong>Cases:</strong> ${d.TotalCases}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                    })
+                    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+
+                groups.append("rect")
+                    .attr("class", "recovered-bar")
+                    .attr("x", barWidth)
+                    .attr("y", d => y(d.TotalRecovered))
+                    .attr("width", barWidth)
+                    .attr("height", d => height - margin.bottom - y(d.TotalRecovered))
+                    .attr("fill", "#2ecc71")
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(`<strong>Recovered:</strong> ${d.TotalRecovered}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                    })
+                    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+
+                groups.append("rect")
+                    .attr("class", "deaths-bar")
+                    .attr("x", 2 * barWidth)
+                    .attr("y", d => y(d.TotalDeaths))
+                    .attr("width", barWidth)
+                    .attr("height", d => height - margin.bottom - y(d.TotalDeaths))
+                    .attr("fill", "#e74c3c")
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition().duration(200).style("opacity", .9);
+                        tooltip.html(`<strong>Deaths:</strong> ${d.TotalDeaths}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                    })
+                    .on("mouseout", () => tooltip.transition().duration(200).style("opacity", 0));
+
+                // Store data for filtering
+                createGroupedBarChart.data = aggregatedData;
+                createGroupedBarChart.groups = groups;
+                createGroupedBarChart.x = x;
+                createGroupedBarChart.y = y;
+            }).catch(error => {
+                console.error('Error fetching the CSV file:', error);
+            });
+        }
+
+        // Create all charts
+        charts.forEach(createChart);
+        createGroupedBarChart("#fourth-visualisation");
+
+        // Add filter functionality for all charts
+        d3.select("#continent").on("change", function () {
+            const selectedContinent = this.value;
+
+            charts.forEach(chart => {
+                const filteredData = selectedContinent === "All" ? chart.data : chart.data.filter(d => d.Continent === selectedContinent);
+
+                chart.bars.data(filteredData)
+                    .join("rect")
+                    .attr("x", d => chart.x(d.Continent))
+                    .attr("y", d => chart.y(d.value))
+                    .attr("width", chart.x.bandwidth())
+                    .attr("height", d => height - margin.bottom - chart.y(d.value))
+                    .attr("fill", chart.color);
+            });
+
+            // Filter the fourth chart
+            const filteredGroupedData = selectedContinent === "All" ? createGroupedBarChart.data : createGroupedBarChart.data.filter(d => d.Continent === selectedContinent);
+
+            createGroupedBarChart.groups.data(filteredGroupedData)
+                .join("g")
+                .attr("transform", d => `translate(${createGroupedBarChart.x(d.Continent)},0)`)
+                .each(function (d) {
+                    const group = d3.select(this);
+                    group.select(".cases-bar")
+                        .attr("y", createGroupedBarChart.y(d.TotalCases))
+                        .attr("height", height - margin.bottom - createGroupedBarChart.y(d.TotalCases));
+                    group.select(".recovered-bar")
+                        .attr("y", createGroupedBarChart.y(d.TotalRecovered))
+                        .attr("height", height - margin.bottom - createGroupedBarChart.y(d.TotalRecovered));
+                    group.select(".deaths-bar")
+                        .attr("y", createGroupedBarChart.y(d.TotalDeaths))
+                        .attr("height", height - margin.bottom - createGroupedBarChart.y(d.TotalDeaths));
+                });
+        });
+    </script>
+</body>
+</html>
